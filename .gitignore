@@ -15,7 +15,8 @@ notebooks/.ipynb_checkpoints/
 
 # Variables d'environnement
 .env
-.env.*
+.env.local
+# .env.example est volontairement versionné
 
 # macOS
 .DS_Store
