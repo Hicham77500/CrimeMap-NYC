@@ -147,9 +147,90 @@ def build_hotspots(frame: pd.DataFrame, eps_km: float = 0.5, min_samples: int = 
     )
 
 
-def save_outputs(cleaned: pd.DataFrame, hotspots: pd.DataFrame, paths: PipelinePaths) -> None:
+def build_dashboard_stats(raw: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """Génère toutes les agrégations nécessaires au dashboard depuis les données brutes."""
+    data = raw.copy()
+    data.columns = [col.lower() for col in data.columns]
+
+    # Date + heure
+    data["_date"] = pd.to_datetime(data.get("cmplnt_fr_dt"), errors="coerce")
+    data["_month"] = data["_date"].dt.to_period("M").astype(str)
+    data["_year"] = data["_date"].dt.year
+    if "cmplnt_fr_tm" in data.columns:
+        data["_hour"] = pd.to_numeric(
+            data["cmplnt_fr_tm"].astype(str).str[:2], errors="coerce"
+        )
+    else:
+        data["_hour"] = None
+
+    borough_col = "boro_nm" if "boro_nm" in data.columns else "borough"
+    crime_col = "ofns_desc" if "ofns_desc" in data.columns else "crime_type"
+    law_col = "law_cat_cd" if "law_cat_cd" in data.columns else None
+
+    by_borough = (
+        data.groupby(borough_col, dropna=True)
+        .size()
+        .reset_index(name="crime_count")
+        .rename(columns={borough_col: "borough"})
+        .sort_values("crime_count", ascending=False)
+    )
+
+    by_crime_type = (
+        data.groupby(crime_col, dropna=True)
+        .size()
+        .reset_index(name="crime_count")
+        .rename(columns={crime_col: "crime_type"})
+        .sort_values("crime_count", ascending=False)
+        .head(20)
+    )
+
+    by_hour = (
+        data.dropna(subset=["_hour"])
+        .groupby("_hour")
+        .size()
+        .reset_index(name="crime_count")
+        .rename(columns={"_hour": "hour"})
+        .sort_values("hour")
+    ) if "_hour" in data.columns else pd.DataFrame(columns=["hour", "crime_count"])
+
+    by_law_category = (
+        data.groupby(law_col, dropna=True)
+        .size()
+        .reset_index(name="crime_count")
+        .rename(columns={law_col: "law_category"})
+        .sort_values("crime_count", ascending=False)
+    ) if law_col else pd.DataFrame(columns=["law_category", "crime_count"])
+
+    by_month = (
+        data.groupby("_month", dropna=True)
+        .size()
+        .reset_index(name="crime_count")
+        .rename(columns={"_month": "month"})
+        .sort_values("month")
+    )
+
+    return {
+        "by_borough": by_borough,
+        "by_crime_type": by_crime_type,
+        "by_hour": by_hour,
+        "by_law_category": by_law_category,
+        "by_month": by_month,
+    }
+
+
+def save_outputs(
+    cleaned: pd.DataFrame,
+    hotspots: pd.DataFrame,
+    paths: PipelinePaths,
+    stats: dict[str, pd.DataFrame] | None = None,
+) -> None:
     cleaned.to_csv(paths.clean_file, index=False)
     hotspots.to_csv(paths.hotspot_file, index=False)
+    if stats:
+        stats_dir = paths.processed_dir / "stats"
+        stats_dir.mkdir(exist_ok=True)
+        for name, frame in stats.items():
+            frame.to_csv(stats_dir / f"{name}.csv", index=False)
 
 
 def run_pipeline(source: str | Path = DATASET_URL, base_dir: Path | str = Path("data")) -> dict[str, pd.DataFrame]:
@@ -158,5 +239,6 @@ def run_pipeline(source: str | Path = DATASET_URL, base_dir: Path | str = Path("
     raw.to_csv(paths.raw_file, index=False)
     cleaned = clean_crime_data(raw)
     hotspots = build_hotspots(cleaned) if not cleaned.empty else pd.DataFrame()
-    save_outputs(cleaned, hotspots, paths)
-    return {"raw": raw, "cleaned": cleaned, "hotspots": hotspots}
+    stats = build_dashboard_stats(raw)
+    save_outputs(cleaned, hotspots, paths, stats)
+    return {"raw": raw, "cleaned": cleaned, "hotspots": hotspots, "stats": stats}
