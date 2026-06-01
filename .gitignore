@@ -1,0 +1,25 @@
+# Données brutes et traitées — trop lourdes pour Git
+data/
+
+# Environnements Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# Variables d'environnement
+.env
+.env.*
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/settings.json
+.idea/
