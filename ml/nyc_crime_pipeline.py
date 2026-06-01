@@ -136,7 +136,7 @@ def build_hotspots(frame: pd.DataFrame, eps_km: float = 0.5, min_samples: int = 
     if data.empty:
         return pd.DataFrame(columns=["cluster_id", "latitude", "longitude", "crime_count"])
 
-    coordinates = data[["latitude", "longitude"]].apply(lambda row: [radians(row[0]), radians(row[1])], axis=1).to_list()
+    coordinates = [[radians(lat), radians(lon)] for lat, lon in zip(data["latitude"], data["longitude"])]
     labels = DBSCAN(eps=eps_km / 6371.0, min_samples=min_samples, metric="haversine").fit_predict(coordinates)
     data = data.assign(cluster_id=labels)
     return (
